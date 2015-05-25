@@ -18,6 +18,7 @@
              Region
              Regions]
            com.amazonaws.services.cloudsearchdomain.AmazonCloudSearchDomainClient
+           com.amazonaws.services.lambda.AWSLambdaClient
            [com.amazonaws.services.s3
              AmazonS3Client
              AmazonS3EncryptionClient]
@@ -116,17 +117,21 @@
 (defn defcredential
   "Specify the AWS access key, secret key and optional
   endpoint to use on subsequent requests."
-  [access-key secret-key & [endpoint]]
-  (reset!
-    credential
-    (keys->cred access-key secret-key endpoint)))
+  ([cred]
+   (reset! credential cred))
+  ([access-key secret-key & [endpoint]]
+   (defcredential (keys->cred access-key secret-key endpoint))))
 
 (defmacro with-credential
   "Per invocation binding of credentials for ad-hoc
   service calls using alternate user/password combos
   (and endpoints)."
   [cred & body]
-  `(binding [*credentials* (apply keys->cred ~cred)]
+  `(binding [*credentials*
+             (let [cred# ~cred]
+               (if (sequential? cred#)
+                 (apply keys->cred cred#)
+                 cred#))]
     (do ~@body)))
 
 (declare new-instance)
@@ -823,6 +828,7 @@
     (fn [col method]
       (let [fname (camel->keyword (.getName method))]
         (if (and (contains? excluded fname)
+                 (not= client AWSLambdaClient)
                  (not= client AmazonCloudSearchDomainClient))
             col
             (if (contains? col fname)
